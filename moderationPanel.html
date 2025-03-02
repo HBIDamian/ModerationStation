@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moderation Station</title>
+    <style>
+        html {
+            background-color: #000;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            display: flex;
+            height: 100vh;
+        }
+
+        #twitch-chat,
+        #youtube-chat {
+            margin: 0;
+            padding: 0;
+            width: 50%;
+            height: 100vh !important;
+            display: flex;
+            align-items: center;
+        }
+
+        iframe {
+            width: 99%;
+            height: 100vh;
+            border: none;
+        }
+
+        #twitch-chat {
+            background-color: #33244f;
+            background-image: url('./assets/images/twitch.256x256.png');
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            background-position: center right 20%;
+            background-size: 20%;
+            justify-content: flex-end;
+        }
+
+        #youtube-chat {
+            background-color: #4f2424;
+            background-image: url('./assets/images/youtube.256x256.png');
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            background-position: center left 20%;
+            background-size: 20%;
+            justify-content: flex-start;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="youtube-chat"></div>
+    <div id="twitch-chat"></div>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const youtubeChannel = urlParams.get('youtubeChannel');
+        const twitchUser = urlParams.get('twitchUser');
+        document.title = "Moderation Station - " + youtubeChannel + " & " + twitchUser;
+
+        function getTwitchChat(user) {
+            let frame = document.createElement("iframe");
+            frame.src = "https://www.twitch.tv/embed/" + user + "/chat?parent=" + window.location.hostname + "&darkpopout";
+            frame.allowFullscreen = true;
+            frame.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+            frame.allowtransparency = true;
+            frame.frameborder = 0;
+            frame.title = "Twitch Chat";
+            let wrapper = document.getElementById("twitch-chat");
+            wrapper.appendChild(frame);
+        }
+
+        function getChannelId(username) {
+            return fetch('./getChannelIDFromUsername.php?username=' + username)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Couldn\'t fetch data');
+                    }
+                    return response.text();
+                })
+                .then(data => {
+                    if (!data) {
+                        throw new Error('Couldn\'t find channel ID');
+                    }
+                    return data;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    return null;
+                });
+        }
+
+        function getYouTubeChat(channelid) {
+            let channelPromise;
+            if (!channelid.startsWith('UC')) {
+                if (!channelid.startsWith('@')){
+                    channelid = "@" + channelid;
+                }
+                channelPromise = getChannelId(channelid);
+            } else {
+                channelPromise = Promise.resolve(channelid);
+            }
+
+            channelPromise.then(channel => {
+                fetch('./getLiveVideoID.php?channelId=' + channel)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Couldn\'t fetch data');
+                        }
+                        return response.text();
+                    })
+                    .then(data => {
+                        if (!data) {
+                            throw new Error('Couldn\'t find video ID');
+                        }
+
+                        let frame = document.createElement("iframe");
+                        frame.src = "https://www.youtube.com/live_chat?v=" + data + "&embed_domain=" + window.location.hostname + "&dark_theme=1";
+                        frame.allowFullscreen = true;
+                        frame.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+                        frame.allowtransparency = true;
+                        frame.frameborder = 0;
+                        frame.title = "YouTube Chat";
+                        let wrapper = document.getElementById("youtube-chat");
+                        wrapper.appendChild(frame);
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                    });
+            });
+        }
+
+        // NOTE: This is a backup method in case the above method doesn't work
+        // This method uses a CORS proxy to fetch the data from YouTube, as YouTube doesn't allow cross-origin requests
+        // This method may not work in the future, as the CORS proxy may be taken down.
+        function getYouTubeChatWithCors(channelid) {
+            let channelPromise;
+            if (!channelid.startsWith('UC')) {
+                channelPromise = getChannelId(channelid);
+            } else {
+                channelPromise = Promise.resolve(channelid);
+            }
+
+            channelPromise.then(channel => {
+                var url = "https://www.youtube.com/feeds/videos.xml?channel_id=" + channel;
+                const cors = "https://corsproxy.io/?url=";
+
+                fetch(cors + url)
+                    .then(response => response.text())
+                    .then(data => {
+                        var parser = new DOMParser();
+                        var xmlDoc = parser.parseFromString(data, "text/xml");
+                        var video_id = xmlDoc.getElementsByTagName("entry")[0].getElementsByTagName("yt:videoId")[0].innerHTML;
+                        let frame = document.createElement("iframe");
+                        frame.src = "https://www.youtube.com/live_chat?v=" + video_id + "&embed_domain=" + window.location.hostname + "&dark_theme=1";
+                        frame.allowFullscreen = true;
+                        frame.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+                        frame.allowtransparency = true;
+                        frame.frameborder = 0;
+                        frame.title = "YouTube Chat";
+                        let wrapper = document.getElementById("youtube-chat");
+                        wrapper.appendChild(frame);
+                    });
+            });
+        }
+
+        getTwitchChat(twitchUser);
+        getYouTubeChat(youtubeChannel);
+        // getYouTubeChatWithCors(youtubeChannel); // This is a backup method 
+    </script>
+</body>
+
+</html>
